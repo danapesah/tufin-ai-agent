@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import uuid
 from contextlib import asynccontextmanager
@@ -5,6 +6,8 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
+
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 from agent import build_agent, run_task
 from config import settings
@@ -82,9 +85,9 @@ def get_task_by_id(task_id: str):
     )
 
 
-@app.get("/")
+@app.get("/", response_class=FileResponse)
 def index():
-    return FileResponse("static/index.html")
+    return FileResponse(os.path.join(_STATIC_DIR, "index.html"))
 
 
 @app.get("/health", response_model=HealthResponse)

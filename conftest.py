@@ -1,4 +1,5 @@
-import sys
-import os
+import os, sys
 
-sys.path.insert(0, os.path.dirname(__file__))
+root = os.path.dirname(__file__)
+if root not in sys.path:
+    sys.path.insert(0, root)
