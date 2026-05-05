@@ -42,6 +42,7 @@ async def build_agent():
         - Use the most appropriate math tool for the operation
         - Show the result clearly
         You may need to make multiple tool calls to break down complex expressions.
+        After each tool result, briefly explain what the result means before deciding your next step.
         Once you have the final result, return it immediately.""",
     )
 
@@ -53,6 +54,7 @@ async def build_agent():
         - Use the exact conversion tool that matches the requested unit types
         - Return the converted value with the target unit clearly stated
         If the conversion requires chaining multiple steps, do so iteratively.
+        After each tool result, briefly explain what the result means before deciding your next step.
         Once you have the final result, return it immediately.""",
     )
 
@@ -64,6 +66,7 @@ async def build_agent():
         - Accuracy (most reliable and recent sources)
         - Relevance (directly answers the query)
         You may need to make multiple searches to iteratively find the best answer.
+        After each search result, briefly explain what you found and whether it answers the query before deciding your next step.
         You have a suggested limit of 5 web searches. Count every web_search call you make.
         After 5 searches, stop and summarize the best information you have found so far.""",
     )
@@ -75,6 +78,7 @@ async def build_agent():
         You are not allowed to ask any more follow up questions, you must retrieve and report the weather based on the city provided.
         - Report temperature, feels-like temperature, humidity, and conditions
         - Present the information clearly and concisely
+        After receiving the weather data, briefly explain what you see in the result before returning your answer.
         Once you have the weather data, return it immediately.""",
     )
 
@@ -152,7 +156,8 @@ async def build_agent():
         Once the state is updated successfully, delegate only to the specialists that are needed.
         You must call at least one specialist — never answer directly without delegating.
         Not all specialists need to be called in every run — only call the ones relevant to the task.
-        Once you have their results, combine them into a clear final answer for the user.""",
+        After receiving each specialist's result, briefly explain what you learned from it before deciding your next step.
+        Once you have all results, combine them into a clear final answer for the user.""",
     )
 
     return coordinator
