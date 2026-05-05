@@ -29,8 +29,13 @@
     .trace { background: #0d0d1a; border: 1px solid #2a2a3e; border-radius: 6px; padding: 10px 14px; max-width: 75%; font-size: 11px; color: #888; display: none; flex-direction: column; gap: 5px; }
     .trace.open { display: flex; }
     .trace .step { display: flex; gap: 8px; overflow: hidden; }
-    .trace .step-type { color: #555; min-width: 90px; flex-shrink: 0; }
-    .trace .tool-name { color: #c9a96e; min-width: 150px; flex-shrink: 0; }
+    .trace .step-type { min-width: 90px; flex-shrink: 0; color: #555; }
+    .trace .step-type.user_input { color: #7c9ef8; }
+    .trace .step-type.ai_reasoning { color: #b07fe0; }
+    .trace .step-type.tool_call { color: #c9a96e; }
+    .trace .step-type.tool_result { color: #7fe07f; }
+    .trace .step-type.final_answer { color: #e0e0e0; }
+    .trace .tool-name { color: #888; min-width: 150px; flex-shrink: 0; }
     .trace .step-content { color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     #input-bar { padding: 14px 20px; border-top: 1px solid #2a2a3e; display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0; }
@@ -143,7 +148,7 @@
         step.className = 'step';
 
         const typeSpan = document.createElement('span');
-        typeSpan.className = 'step-type';
+        typeSpan.className = 'step-type ' + (s.step_type ?? '');
         typeSpan.textContent = s.step_type ?? '';
 
         const nameSpan = document.createElement('span');
