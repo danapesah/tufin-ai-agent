@@ -9,14 +9,13 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.types import Command
 
 from config import settings
-from tools import weather, web_search, MATH_TOOLS
+from tools import weather, web_search, query_db, MATH_TOOLS
 
 
 class TaskState(AgentState):
     math_query: str
     convert_query: str
-    search_query: str
-    weather_city: str
+    shelter_query: str
 
 
 async def build_agent():
@@ -34,6 +33,18 @@ async def build_agent():
     convert_tools = await convert_client.get_tools()
 
     # ── Sub-agents ─────────────────────────────────────────────────────────
+    shelter_agent = create_agent(
+        model=settings.model,
+        tools=[query_db],
+        system_prompt="""You are an animal shelter database specialist. Query the SQLite database to answer questions about the animals available for adoption.
+        The database has a single table called 'animals' with columns: id, name, type, color, age.
+        The 'type' column contains one of: 'dog', 'cat', or 'bird'.
+        Before writing data queries, always discover the schema first if unsure.
+        If a query fails, inspect the error and retry with a corrected query — do not come back empty-handed.
+        Present your results clearly: list each animal's name, type, color, and age.
+        If asked for counts or summaries, compute them with SQL aggregations rather than fetching all rows.""",
+    )
+
     math_agent = create_agent(
         model=settings.model,
         tools=MATH_TOOLS,
@@ -58,44 +69,19 @@ async def build_agent():
         Once you have the final result, return it immediately.""",
     )
 
-    web_search_agent = create_agent(
-        model=settings.model,
-        tools=[web_search],
-        system_prompt="""You are a web search specialist. Search the web to answer the given query.
-        You are not allowed to ask any more follow up questions, you must find the best answer based on the following criteria:
-        - Accuracy (most reliable and recent sources)
-        - Relevance (directly answers the query)
-        You may need to make multiple searches to iteratively find the best answer.
-        After each search result, briefly explain what you found and whether it answers the query before deciding your next step.
-        You have a suggested limit of 5 web searches. Count every web_search call you make.
-        After 5 searches, stop and summarize the best information you have found so far.""",
-    )
-
-    weather_agent = create_agent(
-        model=settings.model,
-        tools=[weather],
-        system_prompt="""You are a weather specialist. Fetch and report the current weather for the requested city.
-        You are not allowed to ask any more follow up questions, you must retrieve and report the weather based on the city provided.
-        - Report temperature, feels-like temperature, humidity, and conditions
-        - Present the information clearly and concisely
-        After receiving the weather data, briefly explain what you see in the result before returning your answer.
-        Once you have the weather data, return it immediately.""",
-    )
-
     # ── update_state tool ───────────────────────────────────────────────────
     @tool
     def update_state(
         math_query: str,
         convert_query: str,
-        search_query: str,
-        weather_city: str,
+        shelter_query: str,
         runtime: ToolRuntime,
     ) -> str:
-        """Update the task state with queries for each specialist.
+        """Update the task state with queries for math, unit-conversion, and shelter specialists.
         Call this first, alone, before delegating to any specialist.
         Use an empty string for specialists that are not needed for this task.
         If all fields are empty strings, the user input is unclear — do not update state, ask the user to clarify."""
-        if not any([math_query, convert_query, search_query, weather_city]):
+        if not any([math_query, convert_query, shelter_query]):
             return Command(
                 update={
                     "messages": [ToolMessage(
@@ -108,8 +94,7 @@ async def build_agent():
             update={
                 "math_query": math_query,
                 "convert_query": convert_query,
-                "search_query": search_query,
-                "weather_city": weather_city,
+                "shelter_query": shelter_query,
                 "messages": [ToolMessage("State updated successfully.", tool_call_id=runtime.tool_call_id)],
             }
         )
@@ -129,34 +114,17 @@ async def build_agent():
         response = await convert_agent.ainvoke({"messages": [HumanMessage(content=query)]})
         return response["messages"][-1].content
 
-    @tool
-    async def call_web_search_agent(runtime: ToolRuntime) -> str:
-        """Delegate the web search to the web search specialist agent."""
-        query = runtime.state["search_query"]
-        response = await web_search_agent.ainvoke({"messages": [HumanMessage(content=query)]})
-        return response["messages"][-1].content
-
-    @tool
-    async def call_weather_agent(runtime: ToolRuntime) -> str:
-        """Delegate the weather lookup to the weather specialist agent."""
-        city = runtime.state["weather_city"]
-        response = await weather_agent.ainvoke({"messages": [HumanMessage(content=city)]})
-        return response["messages"][-1].content
-
     # ── Coordinator ─────────────────────────────────────────────────────────
     coordinator = create_agent(
         model=settings.model,
-        tools=[update_state, call_math_agent, call_convert_agent, call_web_search_agent, call_weather_agent],
+        tools=[update_state, call_math_agent, call_convert_agent, web_search, weather],
         state_schema=TaskState,
-        system_prompt="""You are a general-purpose assistant with access to specialist agents.
-        First, analyze the user's request and determine which specialists are needed.
-        When you have all the information, call update_state with the relevant queries.
-        This tool must be called alone, without any other tool calls. It must complete and return before you proceed.
-        If update_state reports that all fields are empty, the user input is unclear — ask the user to clarify and do not delegate to any specialist.
-        Once the state is updated successfully, delegate only to the specialists that are needed.
-        You must call at least one specialist — never answer directly without delegating.
-        Not all specialists need to be called in every run — only call the ones relevant to the task.
-        After receiving each specialist's result, briefly explain what you learned from it before deciding your next step.
+        system_prompt="""You are a general-purpose assistant with access to specialist agents and direct tools.
+        Analyze the user's request and determine what is needed:
+        - For math or unit conversion: call update_state first (alone, before any other tool call) with the relevant queries, then delegate to call_math_agent or call_convert_agent.
+        You must use at least one tool — never answer directly without using a tool.
+        Not all tools need to be used in every run — only call the ones relevant to the task.
+        After receiving each result, briefly explain what you learned before deciding your next step.
         Once you have all results, combine them into a clear final answer for the user.""",
     )
 
@@ -170,10 +138,9 @@ async def run_task(agent, task: str) -> dict[str, Any]:
             "messages": [HumanMessage(content=task)],
             "math_query": "",
             "convert_query": "",
-            "search_query": "",
-            "weather_city": "",
         }
     )
+
     latency_ms = int((time.perf_counter() - start) * 1000)
 
     messages = result["messages"]
@@ -198,6 +165,7 @@ def _extract_trace(messages: list) -> list[dict]:
             "step_type": "user_input",
             "content": str(messages[0].content),
             "tool_name": None,
+            "msg_type": type(messages[0]).__name__,
         })
 
     for msg in messages[1:]:
@@ -208,6 +176,7 @@ def _extract_trace(messages: list) -> list[dict]:
                     "step_type": "ai_reasoning",
                     "content": str(msg.content),
                     "tool_name": None,
+                    "msg_type": type(msg).__name__,
                 })
             if msg.tool_calls:
                 for tc in msg.tool_calls:
@@ -216,6 +185,7 @@ def _extract_trace(messages: list) -> list[dict]:
                         "step_type": "tool_call",
                         "content": str(tc.get("args", {})),
                         "tool_name": tc.get("name"),
+                        "msg_type": type(msg).__name__,
                     })
             elif msg.content:
                 steps.append({
@@ -223,6 +193,7 @@ def _extract_trace(messages: list) -> list[dict]:
                     "step_type": "final_answer",
                     "content": msg.content,
                     "tool_name": None,
+                    "msg_type": type(msg).__name__,
                 })
         elif isinstance(msg, ToolMessage):
             steps.append({
@@ -230,6 +201,7 @@ def _extract_trace(messages: list) -> list[dict]:
                 "step_type": "tool_result",
                 "content": str(msg.content),
                 "tool_name": msg.name,
+                "msg_type": type(msg).__name__,
             })
     return steps
 
