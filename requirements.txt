@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+langchain
+langchain-openai
+langchain-community
+langchain-mcp-adapters
+langgraph
+openai
+requests
+tavily-python
+duckduckgo-search
+pydantic
+pydantic-settings
+python-dotenv
+httpx
