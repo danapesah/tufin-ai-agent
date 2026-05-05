@@ -52,8 +52,8 @@
   <div id="thread"></div>
 
   <div id="input-bar">
-    <textarea id="task-input" placeholder="Ask me anything — math, weather, search, unit conversion…" rows="1"></textarea>
-    <button id="send-btn">Send</button>
+    <textarea id="task-input" aria-label="Task input" placeholder="Ask me anything — math, weather, search, unit conversion…" rows="1"></textarea>
+    <button id="send-btn" type="button">Send</button>
   </div>
 
   <script>
@@ -111,45 +111,73 @@
     }
 
     function replaceThinking(el, response) {
-      const { answer, trace, latency_ms, token_usage, model } = response;
+      const { answer, latency_ms, model } = response;
+      const trace = Array.isArray(response.trace) ? response.trace : [];
+      const token_usage = response.token_usage ?? {};
 
       if (!modelLabel.textContent) {
-        modelLabel.textContent = model;
+        modelLabel.textContent = model ?? '';
       }
 
       const steps = trace.length;
-      const tokens = token_usage.total_tokens ?? '—';
-      const traceId = 'trace-' + Date.now();
+      const tokens = Number.isFinite(token_usage.total_tokens) ? token_usage.total_tokens : '—';
+      const latency = Number.isFinite(latency_ms) ? latency_ms : '—';
 
-      const traceHtml = trace.map(s => `
-        <div class="step">
-          <span class="step-type">${escapeHtml(s.step_type)}</span>
-          <span class="tool-name">${escapeHtml(s.tool_name ?? '')}</span>
-          <span class="step-content">${escapeHtml(String(s.content).slice(0, 160))}</span>
-        </div>
-      `).join('');
+      const answerEl = document.createElement('div');
+      answerEl.className = 'agent-bubble';
+      answerEl.textContent = answer ?? '';
 
-      el.innerHTML = `
-        <div class="agent-bubble">${escapeHtml(answer)}</div>
-        <div class="stats-row">
-          <span class="stats">↳ ${steps} steps · ${latency_ms}ms · ${tokens} tokens</span>
-          <button class="toggle-trace" onclick="toggleTrace('${traceId}')">▶ show trace</button>
-        </div>
-        <div class="trace" id="${traceId}">${traceHtml}</div>
-      `;
+      const statsRow = document.createElement('div');
+      statsRow.className = 'stats-row';
+
+      const statsSpan = document.createElement('span');
+      statsSpan.className = 'stats';
+      statsSpan.textContent = `↳ ${steps} steps · ${latency}ms · ${tokens} tokens`;
+      statsRow.appendChild(statsSpan);
+
+      const traceEl = document.createElement('div');
+      traceEl.className = 'trace';
+
+      trace.forEach(s => {
+        const step = document.createElement('div');
+        step.className = 'step';
+
+        const typeSpan = document.createElement('span');
+        typeSpan.className = 'step-type';
+        typeSpan.textContent = s.step_type ?? '';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'tool-name';
+        nameSpan.textContent = s.tool_name ?? '';
+
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'step-content';
+        contentSpan.textContent = String(s.content ?? '').slice(0, 160);
+
+        step.append(typeSpan, nameSpan, contentSpan);
+        traceEl.appendChild(step);
+      });
+
+      if (steps > 0) {
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'toggle-trace';
+        toggleBtn.type = 'button';
+        toggleBtn.textContent = '▶ show trace';
+        toggleBtn.addEventListener('click', () => {
+          const open = traceEl.classList.toggle('open');
+          toggleBtn.textContent = open ? '▼ hide trace' : '▶ show trace';
+        });
+        statsRow.appendChild(toggleBtn);
+      }
+
+      el.innerHTML = '';
+      el.append(answerEl, statsRow, traceEl);
       scrollToBottom();
     }
 
     function showError(el, message) {
       el.innerHTML = `<div class="agent-bubble error">${escapeHtml(message)}</div>`;
       scrollToBottom();
-    }
-
-    function toggleTrace(id) {
-      const traceEl = document.getElementById(id);
-      const btn = traceEl.previousElementSibling.querySelector('.toggle-trace');
-      const open = traceEl.classList.toggle('open');
-      btn.textContent = open ? '▼ hide trace' : '▶ show trace';
     }
 
     async function sendTask() {
