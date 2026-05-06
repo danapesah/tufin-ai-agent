@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 class TaskRequest(BaseModel):
     task: str = Field(..., min_length=1, max_length=2000, example="What is the weather in Tokyo?")
+    thread_id: str = Field(default="default", example="user-123")
 
 
 class TraceStep(BaseModel):

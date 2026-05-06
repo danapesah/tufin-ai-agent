@@ -160,10 +160,6 @@ def query_db(query: str) -> str:
 @tool
 def web_search(query: str) -> str:
     """Search the web and return a summary of the top results."""
-    if os.getenv("TAVILY_API_KEY"):
-        from langchain_community.tools.tavily_search import TavilySearchResults
-        results = TavilySearchResults(max_results=3).invoke(query)
-        return "\n".join(f"- {r['url']}: {r['content'][:300]}" for r in results)
-    else:
-        from langchain_community.tools import DuckDuckGoSearchRun
-        return DuckDuckGoSearchRun().invoke(query)
+    from langchain_community.tools.tavily_search import TavilySearchResults
+    results = TavilySearchResults(max_results=3).invoke(query)
+    return "\n".join(f"- {r['url']}: {r['content'][:300]}" for r in results)

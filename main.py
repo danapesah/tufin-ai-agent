@@ -31,23 +31,37 @@ async def submit_task(req: TaskRequest, request: Request):
     created_at = datetime.now(timezone.utc).isoformat()
 
     try:
-        result = await run_task(request.app.state.agent, req.task)
+        result = await run_task(request.app.state.agent, req.task, req.thread_id)
+        record = {
+            "task_id": task_id,
+            "input": req.task,
+            "answer": result["answer"],
+            "trace": result["trace"],
+            "status": "completed",
+            "model": settings.model,
+            "total_tokens": result["token_usage"].get("total_tokens"),
+            "prompt_tokens": result["token_usage"].get("prompt_tokens"),
+            "completion_tokens": result["token_usage"].get("completion_tokens"),
+            "latency_ms": result["latency_ms"],
+            "created_at": created_at,
+        }
     except Exception as e:
+        record = {
+            "task_id": task_id,
+            "input": req.task,
+            "answer": str(e),
+            "trace": [],
+            "status": "failed",
+            "model": settings.model,
+            "total_tokens": None,
+            "prompt_tokens": None,
+            "completion_tokens": None,
+            "latency_ms": None,
+            "created_at": created_at,
+        }
+        save_task(record)
         raise HTTPException(status_code=500, detail=str(e))
 
-    record = {
-        "task_id": task_id,
-        "input": req.task,
-        "answer": result["answer"],
-        "trace": result["trace"],
-        "status": "completed",
-        "model": settings.model,
-        "total_tokens": result["token_usage"].get("total_tokens"),
-        "prompt_tokens": result["token_usage"].get("prompt_tokens"),
-        "completion_tokens": result["token_usage"].get("completion_tokens"),
-        "latency_ms": result["latency_ms"],
-        "created_at": created_at,
-    }
     save_task(record)
 
     return TaskResponse(

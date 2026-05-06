@@ -1,11 +1,10 @@
 fastapi
 uvicorn[standard]
 langchain
-langchain-openai
+langchain-ollama
 langchain-community
 langchain-mcp-adapters
 langgraph
-openai
 requests
 tavily-python
 duckduckgo-search
