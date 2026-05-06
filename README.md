@@ -73,7 +73,7 @@ Fill in `.env`:
 | `TAVILY_API_KEY` | yes | from tavily.com (free tier) |
 | `LANGCHAIN_API_KEY` | no* | from smith.langchain.com — required to run evals (`evals.py`) and for LangSmith tracing (optional: traces are also persisted locally in SQLite) |
 
-### 2. Run with Docker (recommended)
+### 2. Run with Docker
 
 First time only — pull the model into the Ollama volume (~4.7 GB):
 
